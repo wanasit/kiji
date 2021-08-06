@@ -1,8 +1,10 @@
 from kiji.article import Article
+import requests
 
 
-def from_url(url: str) -> Article:
-    pass
+def from_url(url: str, params=None, **kwargs) -> Article:
+    response = requests.get(url, params=params, **kwargs)
+    return from_html(response.text)
 
 
 def from_file(filename: str) -> Article:

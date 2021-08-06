@@ -34,8 +34,14 @@ class Article:
 
     def get_paragraphs(self,
                        include_headers=False,
-                       include_images=False) -> List[Paragraph]:
-        paragraph_elements = extract_paragraph_elements(self.content_element, include_headers=include_headers)
+                       include_images=False,
+                       include_code_blocks=False) -> List[Paragraph]:
+        paragraph_elements = extract_paragraph_elements(
+            self.content_element,
+            include_headers=include_headers,
+            include_images=include_images,
+            include_code_blocks=include_code_blocks)
+
         return [Paragraph(elem) for elem in paragraph_elements]
 
     def to_text(self) -> str:

@@ -14,7 +14,8 @@ import re
 from bs4 import BeautifulSoup
 from bs4.element import NavigableString, Tag, PageElement
 
-TAG_NAMES_SKIP = {'script', 'style', 'code', 'svg'}
+TAG_NAMES_SKIP = {'script', 'style', 'code', 'svg', 'button'}
+TAG_NAMES_CODE_BLOCK = {'pre'}
 TAG_NAMES_INLINE = {'a', 'b', 'em', 'i', 'strong', 'span', 'br'}
 TAG_NAMES_HEADER = {'h1', 'h2', 'h3', 'h4'}
 
@@ -57,15 +58,14 @@ class InspectedElement:
     def from_page_element(node: PageElement, parent: Optional[InspectedElement] = None) -> Optional[InspectedElement]:
 
         if isinstance(node, NavigableString):
-            if not str(node).strip():
-                return None
-
-            return InspectedElement(node, True, parent, [])
+            return InspectedElement._of_navigable_str_node(parent, node)
 
         assert isinstance(node, Tag)
         if node.name in TAG_NAMES_SKIP:
             return None
 
+        if node.name in TAG_NAMES_CODE_BLOCK:
+            return InspectedCodeBlock(parent, node)
 
         result = InspectedElement(
             node,
@@ -84,6 +84,10 @@ class InspectedElement:
 
         result._is_inline = result._is_inline and all_children_inline
         result._children = all_children_results
+
+        if len(result.children) == 1 and result.children[0].is_element:
+            return result.children[0]
+
         return result
 
     @property
@@ -194,8 +198,38 @@ class InspectedElement:
             return f'<ElementInspection TextNode - "{node[:10]}">'
 
         assert isinstance(node, Tag)
-        return f'<ElementInspection[{node.name}]>'
+        node_id = node.get("id")
+        node_id = '#' + node_id if node_id else ''
+        return f'<ElementInspection[{node.name}{node_id}] class={node.get("class", [])}>'
 
+    @staticmethod
+    def _of_navigable_str_node(parent: InspectedElement, node: NavigableString) -> Optional[InspectedElement]:
+        if not str(node).strip():
+            return None
+        return InspectedElement(node, True, parent, [])
+
+
+class InspectedCodeBlock(InspectedElement):
+
+    def __init__(self, parent: InspectedElement, element: Tag):
+        super().__init__(element, False, parent, [])
+
+    def is_paragraph(self):
+        return True
+
+    def get_formatted_text(self):
+        return self.get_content()
+
+    def get_formatted_html(self):
+        return '\n'.join([f'<{self._element_name()}>', self.get_content(), f'</{self._element_name()}>'])
+
+    # noinspection PyUnresolvedReferences
+    def get_content(self):
+        text = ''
+        for c in self._element.contents:
+            if c.string:
+                text += c.string
+        return text
 
 class InspectedPage(InspectedElement):
 

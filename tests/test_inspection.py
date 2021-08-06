@@ -13,18 +13,32 @@ def test_basic_inspection():
     """
 
     page = inspect(html)
-    assert page.is_inline == False
-    assert page.is_paragraph == False
-    assert len(page.children) == 1
+    content = find_element(page, lambda elem: elem._element.get('class') == ['content'])
+    assert content._element_name() == 'div'
+    assert content._element_class() == ['content']
+    assert content.is_inline == False
+    assert content.is_paragraph == False
+    assert len(content.children) == 3
 
-    content_wrapper: InspectedElement = page.children[0]
-    assert content_wrapper.is_inline == False
-    assert content_wrapper.is_paragraph == False
-    assert content_wrapper._element_name() == 'div'
-    assert content_wrapper._element_class() == ['content-wrapper']
-    assert len(content_wrapper.children) == 1
+    for p in content.children:
+        assert p.is_paragraph == True
+        assert p.is_inline == False
 
-    content: InspectedElement = content_wrapper.children[0]
+
+def test_inspection_ignored():
+    html = """
+    <div class="content-wrapper">
+        <div class="content">
+            <h2>Lorem Ipsum <b>Xyz</b>xx</h2>
+            <p>Lorem <i>ipsum</i> dolor <span>sit </span>amet.</p>
+            <div><p>Mauris non mauris in est.</p></div>
+            <button>Submit</button>
+        </div>
+    </div>
+    """
+
+    page = inspect(html)
+    content = find_element(page, lambda elem: elem._element.get('class') == ['content'])
     assert content._element_name() == 'div'
     assert content._element_class() == ['content']
     assert content.is_inline == False
@@ -84,3 +98,27 @@ def test_html_format():
     assert '<h2>Lorem Ipsum <b>Xyz</b>xx</h2>' in format_html
     assert '<p>Lorem <i>ipsum</i> dolor <span>sit </span>amet.</p>' in format_html
     assert '<p>Mauris non mauris.<br/> in est.</p>' in format_html
+
+
+def test_pre_inspection():
+    html = """
+    <div class="content-wrapper">
+        <div class="content">
+            <h2>Lorem Ipsum</h2>
+            <p>Lorem ipsum dolor sit amet.</p>
+<pre><span class="pl-k">const</span> <span class="pl-s1">chrono</span> <span class="pl-c1">=</span> <span class="pl-en">require</span><span class="pl-kos">(</span><span class="pl-s">'chrono-node'</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+
+<span class="pl-c">// or `import chrono from 'chrono-node'` for ECMAScript</span></pre>
+            <p>Mauris non mauris.<br> in est.</p>
+        </div>
+    </div>
+    """
+
+    page = inspect(html)
+    content = find_element(page, lambda elem: elem._element.get('class') == ['content'])
+
+    assert len(content.children) == 4
+
+    assert content.children[2].is_paragraph()
+    assert "const chrono = require('chrono-node');" in content.children[2].get_formatted_text()
+

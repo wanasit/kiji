@@ -5,38 +5,55 @@ The extraction should only rely on inspected information (defined in `kiji.inspe
 and it should avoid using the underline parsed HTML information.
 """
 
-from typing import List, Tuple
+from typing import List, Tuple, Optional, Callable, Any
 
-
-from kiji.inspection import InspectedElement, InspectedPage
+from kiji.inspection import InspectedElement, InspectedPage, InspectedCodeBlock
 
 from collections import deque
 
 
 def extract_content_element(inspection: InspectedPage) -> InspectedElement:
-    # A content is an element with a lot of paragraphs
-    max_paragraph_char_count = 0
-    max_paragraph_elem = None
+    _, largest_size_elem, _ = _find_largest_content_size(inspection)
+    return largest_size_elem
 
-    processing_queue = deque([inspection])
-    while len(processing_queue) > 0:
 
-        elem = processing_queue.popleft()
-        for c in elem.children:
-            processing_queue.append(c)
+def _find_largest_content_size(
+        elem: InspectedElement,
+        max_distance: int = 2
+) -> Tuple[float, InspectedElement, List[float]]:
 
-        paragraph_char_count = sum((len(c.get_formatted_text()) for c in elem.children if c.is_paragraph))
-        if paragraph_char_count > max_paragraph_char_count:
-            max_paragraph_elem = elem
-            max_paragraph_char_count = paragraph_char_count
+    if elem.is_paragraph:
+        content_size = len(elem.get_formatted_text())
+        return (content_size, elem, [content_size])
 
-    return max_paragraph_elem
+    size_by_distance = [0] * max_distance
+    largest_size_elem = None
+    largest_size = 0
+
+    for c in elem.children:
+        c_largest_size, c_largest_size_elem, c_size_by_distance = _find_largest_content_size(c)
+
+        for i in range(len(c_size_by_distance)):
+            size_by_distance[i] += c_size_by_distance[i]
+
+        if c_largest_size > largest_size:
+            largest_size = c_largest_size
+            largest_size_elem = c_largest_size_elem
+
+    content_size = sum(size_by_distance)
+    if content_size > largest_size:
+        largest_size = content_size
+        largest_size_elem = elem
+
+    size_by_distance = [0] + size_by_distance[:-1]
+    return largest_size, largest_size_elem, size_by_distance
 
 
 def extract_paragraph_elements(
         element: InspectedElement,
         include_headers=False,
         include_images=False,
+        include_code_blocks=False,
 ) -> List[InspectedElement]:
     paragraphs = []
     if not element.children:
@@ -58,7 +75,9 @@ def extract_paragraph_elements(
         if c.is_image and not include_images:
             continue
 
+        if isinstance(c, InspectedCodeBlock) and not include_code_blocks:
+            continue
+
         paragraphs += [c]
 
     return paragraphs
-
